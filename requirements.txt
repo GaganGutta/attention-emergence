@@ -1,0 +1,4 @@
+torch>=2.2
+numpy
+matplotlib
+# transformer-lens  # needed from step 6 (Pythia checkpoint analysis)
