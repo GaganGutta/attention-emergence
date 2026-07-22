@@ -72,7 +72,7 @@ def train_one_seed(seed: int, out_dir, S: int = 16, s: int = 3, task_seed: int =
                    steps: int = 10_000, batch_size: int = 256, lr: float = 1e-3,
                    weight_decay: float = 0.01, eval_every: int = 50,
                    eval_size: int = 2048, device: str = "cpu",
-                   save_checkpoints: bool = True) -> list:
+                   save_checkpoints: bool = True, early_stop_evals: int = 0) -> list:
     out_dir = Path(out_dir)
     (out_dir / "ckpt").mkdir(parents=True, exist_ok=True)
 
@@ -96,6 +96,7 @@ def train_one_seed(seed: int, out_dir, S: int = 16, s: int = 3, task_seed: int =
 
     save_at = checkpoint_steps(steps)
     history = []
+    perfect = 0
     for step in range(steps + 1):
         if save_checkpoints and step in save_at:
             torch.save(model.state_dict(), out_dir / "ckpt" / f"step{step}.pt")
@@ -107,6 +108,14 @@ def train_one_seed(seed: int, out_dir, S: int = 16, s: int = 3, task_seed: int =
                 print(f"  seed {seed} step {step:5d}  loss {metrics['out_loss']:.4f}  "
                       f"acc {metrics['acc']:.3f}  exact {metrics['exact_match']:.3f}",
                       flush=True)
+            # A solved run stays solved (online data, no overfitting
+            # pressure), so sustained perfect accuracy means the rest of
+            # the budget is wasted compute. Off by default; sweeps use it.
+            perfect = perfect + 1 if metrics["acc"] >= 0.999 else 0
+            if early_stop_evals and perfect >= early_stop_evals:
+                print(f"  seed {seed} early stop at step {step} "
+                      f"(perfect for {perfect} consecutive evals)", flush=True)
+                break
         if step == steps:
             break
         tokens = sample_batch(A, batch_size, data_gen).to(device)

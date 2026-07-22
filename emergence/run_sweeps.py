@@ -60,7 +60,7 @@ def run_config(out_root: Path, S: int, s: int, seeds: int, steps: int,
             print(f"train S={S:2d} s={s:2d} seed={seed} ({steps} steps)", flush=True)
             history = train_one_seed(
                 seed, run_dir, S=S, s=s, steps=steps, eval_every=eval_every,
-                eval_size=1024, save_checkpoints=False,
+                eval_size=1024, save_checkpoints=False, early_stop_evals=3,
             )
         rows.append({
             "S": S, "s": s, "seed": seed,
