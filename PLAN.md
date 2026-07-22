@@ -2,8 +2,8 @@
 
 Target: reproduce arXiv 2606.25010 from scratch in PyTorch, then extend it. One step at a time, at least one commit per step, assumptions logged as they are made.
 
-1. **Repo scaffold.** README, plan, assumptions, requirements. *(done 2026-07-19)*
-2. **Linear-map task (paper Sec. 3.2).** Data generation (x1 = A x0 mod 2, s-sparse rows), single-layer transformer (D=128, 8 heads, MLP 512), multi-seed training with emergence tracking: per-step loss on output tokens, p(correct), exact-match rate, per-head attention entropy, attention mass on true parent positions. Reproduces the paper's core qualitative result: abrupt emergence at seed-dependent times, coinciding with attention-entropy collapse. *(done 2026-07-19)*
+1. **Repo scaffold.** README, plan, assumptions, requirements. *(done 2026-07-22)*
+2. **Linear-map task (paper Sec. 3.2).** Data generation (x1 = A x0 mod 2, s-sparse rows), single-layer transformer (D=128, 8 heads, MLP 512), multi-seed training with emergence tracking: per-step loss on output tokens, p(correct), exact-match rate, per-head attention entropy, attention mass on true parent positions. Reproduces the paper's core qualitative result: abrupt emergence at seed-dependent times, coinciding with attention-entropy collapse. *(done 2026-07-22)*
 3. **Linear-map analysis.** Sparsity sweep s in {1..S} and state-size sweep S in {8,16,32}; reproduce the finding that medium sparsity is hardest and that plateau length grows with state size (loss-threshold crossing as the plateau metric). Attention-pattern heatmap visualizations pre/post emergence.
 4. **Attention patching.** Transplant post-emergence attention patterns into pre-emergence checkpoints and measure how much capability is recovered; the paper's causal experiment, using the checkpoints saved in step 2.
 5. **Cellular automata task (paper Sec. 3.3).** C=4 colors, lookup-table rules on local windows, N=256 rules, T=16 states, 4-layer model.

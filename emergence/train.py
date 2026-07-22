@@ -71,7 +71,8 @@ def evaluate(model: TinyTransformer, tokens: torch.Tensor, S: int,
 def train_one_seed(seed: int, out_dir, S: int = 16, s: int = 3, task_seed: int = 0,
                    steps: int = 10_000, batch_size: int = 256, lr: float = 1e-3,
                    weight_decay: float = 0.01, eval_every: int = 50,
-                   eval_size: int = 2048, device: str = "cpu") -> list:
+                   eval_size: int = 2048, device: str = "cpu",
+                   save_checkpoints: bool = True) -> list:
     out_dir = Path(out_dir)
     (out_dir / "ckpt").mkdir(parents=True, exist_ok=True)
 
@@ -96,7 +97,7 @@ def train_one_seed(seed: int, out_dir, S: int = 16, s: int = 3, task_seed: int =
     save_at = checkpoint_steps(steps)
     history = []
     for step in range(steps + 1):
-        if step in save_at:
+        if save_checkpoints and step in save_at:
             torch.save(model.state_dict(), out_dir / "ckpt" / f"step{step}.pt")
         if step % eval_every == 0 or step == steps:
             metrics = evaluate(model, eval_tokens, S, A)

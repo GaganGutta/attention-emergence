@@ -6,7 +6,7 @@ The paper's central claim: emergent capabilities in transformers appear abruptly
 
 This repo re-implements the paper's synthetic testbeds from scratch in PyTorch, reproduces the core figures, then extends the analysis with original experiments. Roadmap in [PLAN.md](PLAN.md). Every detail the paper leaves unspecified is recorded in [ASSUMPTIONS.md](ASSUMPTIONS.md).
 
-Started 2026-07-19. No official or third-party implementation of this paper existed as of that date.
+Started 2026-07-22. No official or third-party implementation of this paper existed as of that date.
 
 ## Quickstart
 
@@ -34,7 +34,7 @@ results/            run outputs (gitignored)
 |------|-------|
 | 1. Repo scaffold | done |
 | 2. Linear-map emergence experiment | done |
-| 3. Sparsity / state-size sweeps | next |
+| 3. Sparsity / state-size sweeps | code done, sweep running |
 | 4. Attention patching | planned |
 | 5. Cellular automata task | planned |
 | 6. Pythia checkpoint analysis | planned |
