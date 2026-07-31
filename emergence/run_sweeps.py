@@ -134,6 +134,8 @@ def main() -> None:
     if args.quick:
         grid = [(8, 1), (8, 3)]
         args.seeds, args.steps, args.eval_every = 1, 1500, 100
+        if args.out == "results/sweeps":  # keep smoke output away from real runs
+            args.out = "results/quick"
     else:
         grid = [(16, s) for s in (1, 2, 3, 4, 6, 8, 12, 16)] + [(8, 3), (32, 3)]
 

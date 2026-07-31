@@ -26,15 +26,21 @@ class Block(nn.Module):
             nn.Linear(d_model, d_mlp), nn.GELU(), nn.Linear(d_mlp, d_model)
         )
 
-    def forward(self, x: torch.Tensor, causal_mask: torch.Tensor):
+    def forward(self, x: torch.Tensor, causal_mask: torch.Tensor,
+                pattern_override: torch.Tensor = None):
         B, T, D = x.shape
         q, k, v = self.qkv(self.ln1(x)).chunk(3, dim=-1)
         q = q.view(B, T, self.n_heads, self.d_head).transpose(1, 2)
         k = k.view(B, T, self.n_heads, self.d_head).transpose(1, 2)
         v = v.view(B, T, self.n_heads, self.d_head).transpose(1, 2)
-        scores = q @ k.transpose(-2, -1) / math.sqrt(self.d_head)
-        scores = scores.masked_fill(~causal_mask[:T, :T], float("-inf"))
-        pattern = scores.softmax(dim=-1)  # (B, H, T, T)
+        if pattern_override is None:
+            scores = q @ k.transpose(-2, -1) / math.sqrt(self.d_head)
+            scores = scores.masked_fill(~causal_mask[:T, :T], float("-inf"))
+            pattern = scores.softmax(dim=-1)  # (B, H, T, T)
+        else:
+            # The transplant clamp (step 4): ignore this model's own
+            # attention and average values with the supplied pattern.
+            pattern = pattern_override
         y = (pattern @ v).transpose(1, 2).reshape(B, T, D)
         x = x + self.proj(y)
         x = x + self.mlp(self.ln2(x))
@@ -58,13 +64,15 @@ class TinyTransformer(nn.Module):
         mask = torch.tril(torch.ones(max_len, max_len, dtype=torch.bool))
         self.register_buffer("causal_mask", mask, persistent=False)
 
-    def forward(self, tokens: torch.Tensor, return_attention: bool = False):
+    def forward(self, tokens: torch.Tensor, return_attention: bool = False,
+                patterns_override: list = None):
         B, T = tokens.shape
         pos = torch.arange(T, device=tokens.device)
         x = self.tok_emb(tokens) + self.pos_emb(pos)
         patterns = []
-        for block in self.blocks:
-            x, pattern = block(x, self.causal_mask)
+        for i, block in enumerate(self.blocks):
+            ov = patterns_override[i] if patterns_override is not None else None
+            x, pattern = block(x, self.causal_mask, pattern_override=ov)
             if return_attention:
                 patterns.append(pattern)
         logits = self.unembed(self.ln_f(x))
