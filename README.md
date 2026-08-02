@@ -34,7 +34,7 @@ results/            run outputs (gitignored)
 |------|-------|
 | 1. Repo scaffold | done |
 | 2. Linear-map emergence experiment | done |
-| 3. Sparsity / state-size sweeps | code done, sweep running |
+| 3. Sparsity / state-size sweeps | done; both scaling claims reproduced |
 | 4. Attention patching | done; negative result, see PLAN.md |
 | 5. Cellular automata task | in progress |
 | 6. Pythia checkpoint analysis | planned |
