@@ -37,6 +37,12 @@ Plateau length versus sparsity is a hump spanning three orders of magnitude: tri
 
 Forcing post-emergence attention patterns into a late-plateau checkpoint recovers nothing (accuracy stays ~0.50), while the reverse control destroys the trained model (~1.00 to ~0.50). Parameter-level component swaps show no proper subset of trained components restores the capability; only the near-complete network does (0.90 without embeddings, 0.985 with). In this minimal model the capability is a single co-adapted circuit. The paper's patching-recovery narrative comes from large language models, where downstream circuitry pre-exists; our Pythia results below are consistent with that reading, and the contrast is a boundary condition the paper does not state.
 
+### In-context rule inference emerges too (paper Sec. 3.3)
+
+![cellular automata curves](docs/figures/ca_curves.png)
+
+The cellular automata task (4 colors, 256 candidate local rules, the model must infer which rule generated the trajectory and then apply it). All three seeds plateau just under chance, cliff near step 1,800, then diverge in how fast they consolidate (final-state accuracy 97% by step 3,000 for the fastest seed versus a grind to 90% over 8,000 for the slowest). By the end, heads concentrate up to 97% of their attention exactly on each cell's three upstream neighbors ([parent-mass figure](docs/figures/ca_parent_mass.png)): the model discovers the locality of the physics. Overall token accuracy saturates near 84% for a structural reason: early states of each sequence are unpredictable before the trajectory has revealed which rule is operating, so the gap between overall and final-state accuracy is the in-context inference itself.
+
 ### Real language models (paper Sec. 2)
 
 Emergence step per capability across Pythia sizes (suite accuracy >= 0.75, binary-searched over public training snapshots; null = never within 143k steps):
@@ -75,7 +81,7 @@ results/            run outputs (gitignored)
 | 2. Linear-map emergence experiment | done |
 | 3. Sparsity / state-size sweeps | done; both scaling claims reproduced |
 | 4. Attention patching | done; necessary-but-not-sufficient finding |
-| 5. Cellular automata task | running |
+| 5. Cellular automata task | done |
 | 6. Pythia checkpoint analysis | done |
-| 7. Writeup | in progress |
-| 8. Extension: emergence early-warning | next |
+| 7. Writeup | done |
+| 8. Extension: emergence early-warning | in progress (data fleet) |
