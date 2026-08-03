@@ -33,9 +33,9 @@ def output_loss(logits: torch.Tensor, tokens: torch.Tensor, S: int) -> torch.Ten
 
 @torch.no_grad()
 def evaluate(model: TinyTransformer, tokens: torch.Tensor, S: int,
-             A: torch.Tensor) -> dict:
+             A: torch.Tensor, attn_bias: torch.Tensor = None) -> dict:
     model.eval()
-    logits, patterns = model(tokens, return_attention=True)
+    logits, patterns = model(tokens, return_attention=True, attn_bias=attn_bias)
     pred = logits[:, S - 1 : 2 * S - 1]
     target = tokens[:, S : 2 * S]
     loss = F.cross_entropy(pred.reshape(-1, pred.shape[-1]), target.reshape(-1))
@@ -72,7 +72,8 @@ def train_one_seed(seed: int, out_dir, S: int = 16, s: int = 3, task_seed: int =
                    steps: int = 10_000, batch_size: int = 256, lr: float = 1e-3,
                    weight_decay: float = 0.01, eval_every: int = 50,
                    eval_size: int = 2048, device: str = "cpu",
-                   save_checkpoints: bool = True, early_stop_evals: int = 0) -> list:
+                   save_checkpoints: bool = True, early_stop_evals: int = 0,
+                   n_heads: int = 8, attn_bias: torch.Tensor = None) -> list:
     out_dir = Path(out_dir)
     (out_dir / "ckpt").mkdir(parents=True, exist_ok=True)
 
@@ -85,14 +86,19 @@ def train_one_seed(seed: int, out_dir, S: int = 16, s: int = 3, task_seed: int =
 
     torch.manual_seed(seed)
     data_gen = torch.Generator().manual_seed(10_000 + seed)
-    model = TinyTransformer(max_len=2 * S).to(device)
+    model = TinyTransformer(max_len=2 * S, n_heads=n_heads).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
+    if attn_bias is not None:
+        attn_bias = attn_bias.to(device)
 
     config = {"seed": seed, "task_seed": task_seed, "S": S, "s": s, "steps": steps,
               "batch_size": batch_size, "lr": lr, "weight_decay": weight_decay,
-              "eval_every": eval_every, "eval_size": eval_size}
+              "eval_every": eval_every, "eval_size": eval_size,
+              "arch": {"d_model": 128, "n_heads": n_heads, "n_layers": 1,
+                       "d_mlp": 512}}
     (out_dir / "config.json").write_text(json.dumps(config, indent=2))
     torch.save(A, out_dir / "A.pt")
+    torch.save(eval_tokens.cpu(), out_dir / "eval_tokens.pt")
 
     save_at = checkpoint_steps(steps)
     history = []
@@ -101,7 +107,7 @@ def train_one_seed(seed: int, out_dir, S: int = 16, s: int = 3, task_seed: int =
         if save_checkpoints and step in save_at:
             torch.save(model.state_dict(), out_dir / "ckpt" / f"step{step}.pt")
         if step % eval_every == 0 or step == steps:
-            metrics = evaluate(model, eval_tokens, S, A)
+            metrics = evaluate(model, eval_tokens, S, A, attn_bias=attn_bias)
             metrics["step"] = step
             history.append(metrics)
             if step % 1000 == 0 or step == steps:
@@ -119,7 +125,7 @@ def train_one_seed(seed: int, out_dir, S: int = 16, s: int = 3, task_seed: int =
         if step == steps:
             break
         tokens = sample_batch(A, batch_size, data_gen).to(device)
-        loss = output_loss(model(tokens), tokens, S)
+        loss = output_loss(model(tokens, attn_bias=attn_bias), tokens, S)
         opt.zero_grad()
         loss.backward()
         opt.step()

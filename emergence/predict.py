@@ -120,6 +120,8 @@ def main() -> None:
                     help="second fleet dir (different task setting); the "
                          "model is fit on --fleet and evaluated there")
     ap.add_argument("--out", type=str, default="results/predictor")
+    ap.add_argument("--perms", type=int, default=1000,
+                    help="label permutations for a full-pipeline null test")
     args = ap.parse_args()
 
     out = Path(args.out)
@@ -167,6 +169,22 @@ def main() -> None:
     print(f"single-feature model      LOO MAE: {mae1:7.1f} steps "
           f"({100 * (1 - mae1 / base_mae):+.1f}%, r {r1:.2f}, rho {rho1:.2f}; "
           f"picked {top_feat} in {top_count}/{len(y)} folds)")
+
+    # Null test over the ENTIRE pipeline including in-fold feature
+    # selection: shuffle labels, rerun leave-one-out, count how often a
+    # pipeline with no real signal matches the observed MAE.
+    perm_p = None
+    if args.perms:
+        rng = np.random.default_rng(0)
+        hits = 0
+        for _ in range(args.perms):
+            y_p = rng.permutation(y)
+            pp, _, _ = loo_single_feature(X, y_p)
+            if np.abs(np.exp(pp) - np.exp(y_p)).mean() <= mae1:
+                hits += 1
+        perm_p = (hits + 1) / (args.perms + 1)
+        print(f"permutation test ({args.perms} label shuffles, full pipeline): "
+              f"p = {perm_p:.4f}")
     print("\nfeature -> correlation with log(emergence step):")
     for name, r in sorted(per_feature.items(), key=lambda kv: -abs(kv[1])):
         print(f"  {name:<11} {r:+.2f}   (weight {weights[name]:+.2f})")
@@ -176,7 +194,8 @@ def main() -> None:
               "label_max": int(y_raw.max()), "baseline_mae": base_mae,
               "model_mae": mae, "pearson_log": r_log, "spearman": rho,
               "single_feature": {"mae": mae1, "pearson_log": r1, "spearman": rho1,
-                                 "feature": top_feat, "picked_in_folds": top_count},
+                                 "feature": top_feat, "picked_in_folds": top_count,
+                                 "perm_p_mae": perm_p},
               "feature_correlations": per_feature, "weights": weights}
     if args.transfer:
         t_rows, t_never, t_early = load_rows(args.transfer, args.window)

@@ -1,4 +1,4 @@
-"""Step 4: the attention transplant (paper Sec. 4, the causal experiment).
+"""Step 4: the attention transplant (paper Sec. 2.2 and App. A.1, the causal experiment).
 
 The emergence curves show that capability jumps WHEN attention sharpens.
 That is correlation. This experiment tests causation: run a pre-emergence
@@ -48,43 +48,64 @@ def get_patterns(model, tokens) -> list:
     return patterns
 
 
-def model_at(run_dir: Path, step: int, S: int) -> TinyTransformer:
-    model = TinyTransformer(max_len=2 * S)
+def model_at(run_dir: Path, step: int, config: dict) -> TinyTransformer:
+    arch = config.get("arch", {})
+    model = TinyTransformer(max_len=2 * config["S"],
+                            d_model=arch.get("d_model", 128),
+                            n_heads=arch.get("n_heads", 8),
+                            n_layers=arch.get("n_layers", 1),
+                            d_mlp=arch.get("d_mlp", 512))
     model.load_state_dict(torch.load(run_dir / "ckpt" / f"step{step}.pt",
                                      weights_only=True))
     model.eval()
     return model
 
 
-def rebuild_eval_batch(config: dict) -> torch.Tensor:
-    # Same generator discipline as train_one_seed: the task generator
-    # first draws A, then the eval batch, so replaying both in order
-    # reproduces the exact eval set the run was scored on.
+def rebuild_eval_batch(run_dir: Path, config: dict) -> torch.Tensor:
+    saved = run_dir / "eval_tokens.pt"
+    if saved.exists():
+        return torch.load(saved, weights_only=True)
+    # Older runs predate eval_tokens.pt: replay the task generator in the
+    # same order as train_one_seed (A first, then the eval batch).
     gen = torch.Generator().manual_seed(config["task_seed"])
     A = sample_transition(config["S"], config["s"], gen)
     return sample_batch(A, config["eval_size"], gen)
 
 
 def pick_checkpoints(run_dir: Path, history: list):
+    """pre = last checkpoint strictly before accuracy FIRST crosses 0.55,
+    so a post-emergence dip can never be mistaken for the plateau."""
     ckpt_steps = sorted(int(p.stem[4:]) for p in (run_dir / "ckpt").glob("step*.pt"))
-    acc_at = {h["step"]: h["acc"] for h in history}
-
-    def acc_near(step):  # accuracy at the last eval at or before this step
-        prior = [s for s in acc_at if s <= step]
-        return acc_at[max(prior)] if prior else 0.5
-
-    pre_candidates = [s for s in ckpt_steps if acc_near(s) < 0.55]
+    first_cross = next((h["step"] for h in history if h["acc"] >= 0.55), None)
+    if first_cross is None:
+        return ckpt_steps[-2], ckpt_steps[-1]
+    pre_candidates = [s for s in ckpt_steps if s < first_cross]
     pre = max(pre_candidates) if pre_candidates else ckpt_steps[0]
     return pre, ckpt_steps[-1]
+
+
+def restricted_override(own: list, donor: list, S: int) -> list:
+    """Donor attention only where the skill lives: output-predicting
+    queries (S-1..2S-2) restricted to input keys (0..S-1), renormalized;
+    everything else keeps the pre-model's own pattern. In a 1-layer model
+    the input-half query rows cannot influence output logits at all, so
+    this mainly guards the experiment's intent (and any deeper model)."""
+    mixed = own[0].clone()
+    q = slice(S - 1, 2 * S - 1)
+    mixed[:, :, q, :] = 0.0
+    mixed[:, :, q, :S] = donor[0][:, :, q, :S]
+    mixed[:, :, q, :] /= mixed[:, :, q, :].sum(dim=-1, keepdim=True).clamp_min(1e-9)
+    return [mixed]
 
 
 def run_seed(run_dir: Path) -> dict:
     config = json.loads((run_dir / "config.json").read_text())
     history = json.loads((run_dir / "history.json").read_text())
     S = config["S"]
-    tokens = rebuild_eval_batch(config)
+    tokens = rebuild_eval_batch(run_dir, config)
     pre_step, post_step = pick_checkpoints(run_dir, history)
-    pre_m, post_m = model_at(run_dir, pre_step, S), model_at(run_dir, post_step, S)
+    pre_m = model_at(run_dir, pre_step, config)
+    post_m = model_at(run_dir, post_step, config)
 
     donor = get_patterns(post_m, tokens)   # post-emergence attention
     own = get_patterns(pre_m, tokens)      # pre-emergence attention
@@ -94,6 +115,8 @@ def run_seed(run_dir: Path) -> dict:
         "acc_pre": accuracy(pre_m, tokens, S),
         "acc_post": accuracy(post_m, tokens, S),
         "acc_pre_patched": accuracy(pre_m, tokens, S, override=donor),
+        "acc_pre_patched_restricted": accuracy(
+            pre_m, tokens, S, override=restricted_override(own, donor, S)),
         "acc_post_reversed": accuracy(post_m, tokens, S, override=own),
     }
     # One head at a time: donor pattern for head h, own patterns elsewhere.
@@ -197,6 +220,7 @@ def main() -> None:
         rows.append(row)
         print(f"seed {row['seed']}: pre(step {row['pre_step']}) {row['acc_pre']:.3f}"
               f" -> patched {row['acc_pre_patched']:.3f}"
+              f" (restricted {row['acc_pre_patched_restricted']:.3f})"
               f" | post(step {row['post_step']}) {row['acc_post']:.3f}"
               f" -> reversed {row['acc_post_reversed']:.3f}", flush=True)
     (out / "summary.json").write_text(json.dumps(rows, indent=2))

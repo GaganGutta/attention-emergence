@@ -27,7 +27,8 @@ class Block(nn.Module):
         )
 
     def forward(self, x: torch.Tensor, causal_mask: torch.Tensor,
-                pattern_override: torch.Tensor = None):
+                pattern_override: torch.Tensor = None,
+                attn_bias: torch.Tensor = None):
         B, T, D = x.shape
         q, k, v = self.qkv(self.ln1(x)).chunk(3, dim=-1)
         q = q.view(B, T, self.n_heads, self.d_head).transpose(1, 2)
@@ -35,6 +36,10 @@ class Block(nn.Module):
         v = v.view(B, T, self.n_heads, self.d_head).transpose(1, 2)
         if pattern_override is None:
             scores = q @ k.transpose(-2, -1) / math.sqrt(self.d_head)
+            if attn_bias is not None:
+                # Paper App. B.3: add c*A to the logits so the correct
+                # sparse pattern is favored from step 0 (all heads).
+                scores = scores + attn_bias[:T, :T]
             scores = scores.masked_fill(~causal_mask[:T, :T], float("-inf"))
             pattern = scores.softmax(dim=-1)  # (B, H, T, T)
         else:
@@ -65,14 +70,15 @@ class TinyTransformer(nn.Module):
         self.register_buffer("causal_mask", mask, persistent=False)
 
     def forward(self, tokens: torch.Tensor, return_attention: bool = False,
-                patterns_override: list = None):
+                patterns_override: list = None, attn_bias: torch.Tensor = None):
         B, T = tokens.shape
         pos = torch.arange(T, device=tokens.device)
         x = self.tok_emb(tokens) + self.pos_emb(pos)
         patterns = []
         for i, block in enumerate(self.blocks):
             ov = patterns_override[i] if patterns_override is not None else None
-            x, pattern = block(x, self.causal_mask, pattern_override=ov)
+            x, pattern = block(x, self.causal_mask, pattern_override=ov,
+                               attn_bias=attn_bias)
             if return_attention:
                 patterns.append(pattern)
         logits = self.unembed(self.ln_f(x))

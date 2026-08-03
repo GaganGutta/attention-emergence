@@ -1,0 +1,20 @@
+{
+  "pythia-14m": {
+    "copy": null,
+    "induction": 5000,
+    "list": 19000,
+    "ioi": null
+  },
+  "pythia-70m": {
+    "copy": null,
+    "induction": 12000,
+    "list": 2000,
+    "ioi": null
+  },
+  "pythia-160m": {
+    "copy": 8000,
+    "induction": 1000,
+    "list": 2000,
+    "ioi": 16000
+  }
+}

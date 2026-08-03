@@ -129,6 +129,10 @@ def main() -> None:
     ap.add_argument("--out", type=str, default="results/sweeps")
     ap.add_argument("--quick", action="store_true",
                     help="tiny grid + short runs, just to exercise the code")
+    ap.add_argument("--sparsity-grid-S", type=int, default=None,
+                    help="run the full sparsity sweep at this S instead of "
+                         "the default grid (keeps s/S ratios comparable "
+                         "across state sizes, paper Sec. 3.2)")
     args = ap.parse_args()
 
     if args.quick:
@@ -136,6 +140,9 @@ def main() -> None:
         args.seeds, args.steps, args.eval_every = 1, 1500, 100
         if args.out == "results/sweeps":  # keep smoke output away from real runs
             args.out = "results/quick"
+    elif args.sparsity_grid_S:
+        S = args.sparsity_grid_S
+        grid = [(S, s) for s in (1, 2, 3, 4, 6, 8, 12, 16) if s <= S]
     else:
         grid = [(16, s) for s in (1, 2, 3, 4, 6, 8, 12, 16)] + [(8, 3), (32, 3)]
 
