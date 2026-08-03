@@ -29,7 +29,7 @@ Three identical single-layer transformers on the identical task, differing only 
 
 ![sparsity sweep](docs/figures/sparsity_sweep.png)
 
-Plateau length versus sparsity is a hump spanning three orders of magnitude: trivial at s=1-2, censored at s=6-8 (most seeds never escape a 20,000-step budget), easy again at s=16 where the near-uniform newborn attention is already correct. The peak sits at s/S of roughly one half, matching the paper's joint s/S sweep, which reports ratios near 0.5 as maximally hard; a confirming ratio sweep at S=8 is running. The hump's shape is stable across plateau thresholds 0.55/0.60/0.65 ([threshold figure](docs/figures/threshold_sensitivity.png)). Versus state size, plateaus grow multiplicatively, roughly 100 / 1,900 / 9,000 steps for S=8/16/32 ([figure](docs/figures/size_sweep.png)), though note this axis varies the s/S ratio along with length; the S=8 ratio sweep addresses the confound. Second-order observation: plateau escape and task mastery decouple at medium-high sparsity (s=12 escapes the loss floor but never reaches 90% accuracy in budget; s=16 reaches 90% within 100 steps but converges slowly).
+Plateau length versus sparsity is a hump spanning three orders of magnitude: trivial at s=1-2, censored at s=6-8 (most seeds never escape a 20,000-step budget), easy again at s=16 where the near-uniform newborn attention is already correct. The peak sits at s/S of roughly one half, matching the paper's joint s/S sweep, which reports ratios near 0.5 as maximally hard. The confirming ratio sweep at S=8 adds a nuance: there, every ratio is close to trivial (plateaus of 100-300 steps at our 100-step eval resolution, mild maximum at s/S=0.75), so in our data the hump is an emergent property of larger state sizes; ratio and scale interact rather than factorize. The hump's shape is stable across plateau thresholds 0.55/0.60/0.65 ([threshold figure](docs/figures/threshold_sensitivity.png)). Versus state size, plateaus grow multiplicatively, roughly 100 / 1,900 / 9,000 steps for S=8/16/32 ([figure](docs/figures/size_sweep.png)), though note this axis varies the s/S ratio along with length; the S=8 ratio sweep addresses the confound. Second-order observation: plateau escape and task mastery decouple at medium-high sparsity (s=12 escapes the loss floor but never reaches 90% accuracy in budget; s=16 reaches 90% within 100 steps but converges slowly).
 
 ### The attention pattern is the search bottleneck, not the whole circuit (paper Sec. 2.2 and App. B.3)
 
@@ -46,6 +46,12 @@ Second, the paper's App. B.3 intervention, which we replicate: adding c*A to the
 ![cellular automata curves](docs/figures/ca_curves.png)
 
 The cellular automata task (4 colors, 256 candidate local rules, the model must infer which rule generated the trajectory and then apply it). All three seeds plateau just under chance, cliff near step 1,800, then diverge in how fast they consolidate (final-state accuracy 97% by step 3,000 for the fastest seed versus a grind to 90% over 8,000 for the slowest). By the end, heads concentrate up to 97% of their attention exactly on each cell's three upstream neighbors ([parent-mass figure](docs/figures/ca_parent_mass.png)): the model discovers the locality of the physics. Overall token accuracy saturates near 84% for a structural reason: early states of each sequence are unpredictable before the trajectory has revealed which rule is operating, so the gap between overall and final-state accuracy is the in-context inference itself.
+
+### More heads, more parallel searchers (paper Sec. 4.2)
+
+![head scaling](docs/figures/head_scaling.png)
+
+Same single-layer model, same task (S=16, s=3), same total width D=128, varying only how that width is split into heads. With 1 or 2 heads no seed emerges within 12,000 steps; with 4 heads two of three do; with 8 all three; with 16 all three, fastest and tightest (1,400-2,800 steps). Wider individual heads do not compensate for having fewer of them: each head is an independent searcher for the sparse pattern, and emergence timing behaves like the minimum over parallel lottery tickets. This replicates the direction of the paper's head-count result on its cheapest slice; depth scaling and alternative token mixers (App. B.5, B.6) remain unimplemented here.
 
 ### Real language models (paper Sec. 2)
 
@@ -103,4 +109,4 @@ results/            full run outputs (gitignored)
 | 6. Pythia checkpoint analysis | done |
 | 7. Writeup | done |
 | 8. Extension: emergence early-warning | done; in-domain r=0.57 (perm p=0.008), transfer requires difficulty-scaled windows |
-| 9. Architecture (paper Sec. 4): head-count sweep | running |
+| 9. Architecture (paper Sec. 4): head-count sweep | done; heads act as parallel pattern-searchers |
