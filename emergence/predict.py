@@ -92,18 +92,9 @@ def spearman(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.corrcoef(rank(a), rank(b))[0, 1])
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--fleet", type=str, default="results/fleet")
-    ap.add_argument("--window", type=int, default=250)
-    ap.add_argument("--out", type=str, default="results/predictor")
-    args = ap.parse_args()
-
-    out = Path(args.out)
-    out.mkdir(parents=True, exist_ok=True)
-
+def load_rows(fleet_dir: str, window: int):
     rows, never, early = [], 0, 0
-    for hist_file in sorted(Path(args.fleet).glob("seed*/history.json")):
+    for hist_file in sorted(Path(fleet_dir).glob("seed*/history.json")):
         try:
             history = json.loads(hist_file.read_text())
         except Exception:
@@ -112,12 +103,29 @@ def main() -> None:
         if label is None:
             never += 1
             continue
-        if label <= args.window:
+        if label <= window:
             early += 1
             continue
-        f = features(history, args.window)
+        f = features(history, window)
         if f is not None:
             rows.append((int(hist_file.parent.name[4:]), f, label))
+    return rows, never, early
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--fleet", type=str, default="results/fleet")
+    ap.add_argument("--window", type=int, default=250)
+    ap.add_argument("--transfer", type=str, default=None,
+                    help="second fleet dir (different task setting); the "
+                         "model is fit on --fleet and evaluated there")
+    ap.add_argument("--out", type=str, default="results/predictor")
+    args = ap.parse_args()
+
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+
+    rows, never, early = load_rows(args.fleet, args.window)
 
     if len(rows) < 8:
         print(f"only {len(rows)} usable runs; need more fleet data")
@@ -170,6 +178,40 @@ def main() -> None:
               "single_feature": {"mae": mae1, "pearson_log": r1, "spearman": rho1,
                                  "feature": top_feat, "picked_in_folds": top_count},
               "feature_correlations": per_feature, "weights": weights}
+    if args.transfer:
+        t_rows, t_never, t_early = load_rows(args.transfer, args.window)
+        Xt = np.stack([f for _, f, _ in t_rows])
+        yt_raw = np.array([lab for _, _, lab in t_rows], dtype=float)
+        yt = np.log(yt_raw)
+        # Fit the single-feature model on the ENTIRE source fleet, then
+        # apply it untouched to the transfer domain.
+        corrs = [abs(np.corrcoef(X[:, j], y)[0, 1]) for j in range(X.shape[1])]
+        j = int(np.argmax(corrs))
+        a, b = np.polyfit(X[:, j], y, 1)
+        pred_t = a * Xt[:, j] + b
+        r_t = float(np.corrcoef(pred_t, yt)[0, 1])
+        rho_t = spearman(pred_t, yt_raw)
+        mae_raw = float(np.abs(np.exp(pred_t) - yt_raw).mean())
+        # Intercept-only recalibration: the harder task shifts the overall
+        # timescale; refitting b (never a) shows whether the FEATURE
+        # transfers even when the level does not.
+        b_shift = float((yt - a * Xt[:, j]).mean())
+        mae_shift = float(np.abs(np.exp(a * Xt[:, j] + b_shift) - yt_raw).mean())
+        base_mae_t = float(np.abs(np.exp(y.mean()) - yt_raw).mean())
+        print(f"\nTRANSFER to {args.transfer} "
+              f"({len(t_rows)} runs, never {t_never}, early {t_early}; "
+              f"labels {int(yt_raw.min())}-{int(yt_raw.max())}):")
+        print(f"  feature {FEATURE_NAMES[j]}: pearson r (log) {r_t:.2f}, "
+              f"spearman {rho_t:.2f}")
+        print(f"  MAE raw {mae_raw:.0f} | intercept-recalibrated {mae_shift:.0f} "
+              f"| source-mean baseline {base_mae_t:.0f} steps")
+        report["transfer"] = {
+            "fleet": args.transfer, "n": len(t_rows),
+            "label_min": int(yt_raw.min()), "label_max": int(yt_raw.max()),
+            "feature": FEATURE_NAMES[j], "pearson_log": r_t, "spearman": rho_t,
+            "mae_raw": mae_raw, "mae_recalibrated": mae_shift,
+            "source_mean_baseline_mae": base_mae_t}
+
     (out / "report.json").write_text(json.dumps(report, indent=2))
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.8))

@@ -14,6 +14,7 @@ Target: reproduce arXiv 2606.25010 from scratch in PyTorch, then extend it. One 
    - **Features per run, computed on the window [0, 500] only:** attention-entropy level and slope, parent-mass level and drift, loss variance, head-specialization spread. Label: the run's actual emergence step (first eval with acc >= 0.99).
    - **Models:** mean-baseline, then linear regression, deliberately simple so the result is about the signal.
    - **Evaluation:** leave-one-out MAE versus the mean baseline; then the transfer test on held-out s=4 runs. A negative result with this methodology is publishable-in-spirit; fallbacks are a new task family (modular arithmetic, Dyck) and cross-seed attention patching.
+   - *(done 2026-08-02. In-domain N=40: single-feature LOO r=0.57 / Spearman 0.52 / +10.4% MAE over baseline; parent-mass features outrank loss features at the same window. Fixed-window transfer to s=4 (n=15): r ~ 0, point estimate inverted. Diagnosis via proportional windows: s=4's in-domain signal reaches r=0.78 by step 2,000 (pre-emergence), so forecast horizons scale with plateau length; fixed-step windows do not transfer. Open next question: difficulty-normalized or sequential early warning.)*
 
 ## Compute
 

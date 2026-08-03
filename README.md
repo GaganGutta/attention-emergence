@@ -56,6 +56,14 @@ Emergence step per capability across Pythia sizes (suite accuracy >= 0.75, binar
 
 Copying and IOI are scale-gated: absent at 14M and 70M, switching on within 160M's training run. Induction exists at every scale with seed-scattered timing. This matches the paper's claims that larger models acquire capabilities earlier on average while individual timing is stochastic.
 
+### Extension: emergence has foreshocks, with a scaling caveat (original work)
+
+![early warning](docs/figures/early_warning.png)
+
+Across 40 training runs of a fixed task (S=12, s=3), statistics computed from **only the first 500 steps** forecast each run's eventual emergence step: leave-one-out correlation r = 0.57 (Spearman 0.52), a 10.4% MAE improvement over predicting the mean, from a one-feature linear model whose feature (attention mass already sitting on the true parent positions) is selected inside each fold. No run had emerged by step 500, and attention-based features (r up to 0.56) outrank loss-based features (r up to 0.48) at the same window: the gaze moves before the loss does, and how far it has moved carries timing information.
+
+The limit is as informative as the signal. Fit on s=3 and applied to 15 runs of the harder s=4 task at the same fixed window, the predictor transfers at r indistinguishable from zero. Diagnosis: forecast horizons scale with task difficulty. Step 500 is 40-80% of a typical s=3 plateau but only 10-20% of an s=4 plateau, and within s=4 the in-domain signal strengthens from r = 0.26 at step 500 to r = 0.78 at step 2,000 (still fully pre-emergence, earliest label 2,375). Early warning exists, but its clock ticks in units of the task's own plateau length, not in raw steps. A difficulty-normalized or fully sequential predictor is the natural next question, noted in PLAN.md. Caveats stated plainly: n = 15 in the transfer set, one architecture, one task family.
+
 ## Layout
 
 ```
@@ -84,4 +92,4 @@ results/            run outputs (gitignored)
 | 5. Cellular automata task | done |
 | 6. Pythia checkpoint analysis | done |
 | 7. Writeup | done |
-| 8. Extension: emergence early-warning | in progress (data fleet) |
+| 8. Extension: emergence early-warning | done; in-domain forecast r=0.57, transfer requires difficulty-scaled windows |
